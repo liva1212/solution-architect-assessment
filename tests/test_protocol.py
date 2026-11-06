@@ -68,12 +68,26 @@ def test_tools_and_valid_operations(peer):
     assert refund["result"]["structuredContent"]["status"] == "simulated_refund"
 
 
+def test_refund_schema_advertises_constraints(peer):
+    listed = peer[0]({"jsonrpc": "2.0", "id": 3, "method": "tools/list"})
+    refund = next(tool for tool in listed["result"]["tools"] if tool["name"] == "trigger_refund")
+    schema = refund["inputSchema"]
+    assert schema["properties"]["amount"]["exclusiveMinimum"] == 0
+    assert schema["properties"]["amount"]["type"] == "number"
+    assert schema["properties"]["reason"]["minLength"] == 10
+    assert set(schema["required"]) == {"customer_id", "amount", "reason"}
+    assert schema["additionalProperties"] is False
+
+
 @pytest.mark.parametrize("name,args", [
     ("get_customer_record", {}),
     ("get_customer_record", {"customer_id": "CUST-１２３４５"}),
     ("get_customer_record", {"customer_id": 1}),
     ("get_customer_record", {"customer_id": "CUST-00001", "extra": 1}),
     ("trigger_refund", {"customer_id": "CUST-00001"}),
+    ("trigger_refund", {"amount": 1, "reason": "Duplicate order"}),
+    ("trigger_refund", {"customer_id": "CUST-00001", "reason": "Duplicate order"}),
+    ("trigger_refund", {"customer_id": "CUST-00001", "amount": 1}),
     ("trigger_refund", {"customer_id": "CUST-00001", "amount": 0, "reason": "Duplicate order"}),
     ("trigger_refund", {"customer_id": "CUST-00001", "amount": -1, "reason": "Duplicate order"}),
     ("trigger_refund", {"customer_id": "CUST-00001", "amount": "2", "reason": "Duplicate order"}),
