@@ -77,12 +77,16 @@ def create_app(
                         value = json.loads(data)
                     except (json.JSONDecodeError, ValueError) as exc:
                         raise StreamFormatError("Malformed JSON event") from exc
-                    if not isinstance(value, dict) or not isinstance(value.get("choices"), list):
+                    if not isinstance(value, dict) or set(value) != {"choices"} or not isinstance(value.get("choices"), list):
                         raise StreamFormatError("Unsupported event")
+                    if len(value["choices"]) != 1:
+                        raise StreamFormatError("Expected exactly one choice")
                     # Rebuild outbound events from inspected text only; discard metadata.
                     for choice in value["choices"]:
-                        if not isinstance(choice, dict) or not isinstance(choice.get("delta"), dict):
+                        if not isinstance(choice, dict) or set(choice) != {"delta"} or not isinstance(choice.get("delta"), dict):
                             raise StreamFormatError("Unsupported delta")
+                        if not set(choice["delta"]) <= {"content"}:
+                            raise StreamFormatError("Unsupported delta field")
                         content = choice["delta"].get("content")
                         if content is None:
                             continue
