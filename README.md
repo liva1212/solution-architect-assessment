@@ -1,6 +1,27 @@
 # Solution Architect Assessment
 
-- [Task 1: MCP stdio server](task1/README.md)
-- [Task 2: HTTP MCP security gateway](task2/README.md)
+Three small Python services demonstrate MCP tooling, authorization at a gateway, and inspection of streamed LLM-style output. Each task is independently runnable and documented. These are assessment implementations with local mock data and services, not production deployments.
 
-Tasks 3–4 are not implemented.
+| Task | Architecture | Details |
+| --- | --- | --- |
+| 1 — MCP server | A Python stdio MCP server exposes fictional customer lookup and simulated refund tools with validated inputs. | [Task 1 README](task1/README.md) |
+| 2 — MCP security gateway | A FastAPI HTTP/JSON-RPC gateway authenticates callers, applies tool permissions, and forwards authorized requests to a mock downstream server. | [Task 2 README](task2/README.md) |
+| 3 — Streaming PII guardrail | A mock provider streams SSE through a gateway that buffers possible sensitive text and emits rebuilt, sanitized events. | [Task 3 README](task3/README.md) |
+
+## Install and test
+
+Use Python 3.11 or newer from the repository root:
+
+```sh
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m pytest -q
+```
+
+## Task 3 PII Stream Lab
+
+The optional [interactive playground](task3/README.md#interactive-manual-testing) lets reviewers send synthetic text through the same provider, streaming gateway, and redactor used by the API. It shows the original input beside the progressive client-visible output and streaming measurements. It runs locally or in a reviewer's own Codespace; GitHub does not host a live instance. The route is disabled by default.
+
+![PII Stream Lab redacting three synthetic values](docs/images/task3-redaction-demo.png)
+
+Task 4 is not yet implemented.
