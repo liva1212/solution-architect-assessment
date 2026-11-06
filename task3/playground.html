@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PII Stream Lab · Task 3</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #e8edf7; background: #0b1020; line-height: 1.5; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 12% 0%, #1b3155 0, transparent 38%), radial-gradient(circle at 95% 5%, #183a42 0, transparent 30%); opacity: .7; }
+    main { position: relative; max-width: 1240px; margin: 0 auto; padding: 44px 28px 72px; }
+    .eyebrow { color: #66d9bf; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.08; letter-spacing: -.045em; margin: 9px 0 12px; }
+    .intro { max-width: 760px; color: #aab8cf; font-size: 16px; margin: 0 0 28px; }
+    .shell { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }
+    .panel { background: #121c30e8; border: 1px solid #2d3c54; border-radius: 18px; box-shadow: 0 18px 45px #02071244; padding: 24px; }
+    .panel h2 { margin: 0 0 5px; font-size: 19px; letter-spacing: -.02em; }
+    .muted { color: #9eb0c9; font-size: 13px; margin: 0 0 18px; }
+    label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+    textarea, select { width: 100%; background: #0b1425; color: #e8edf7; border: 1px solid #3a4d67; border-radius: 10px; font: inherit; }
+    textarea { min-height: 205px; resize: vertical; padding: 14px; }
+    textarea:focus, select:focus, button:focus-visible { outline: 2px solid #6ae1c4; outline-offset: 2px; }
+    select { padding: 10px 12px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+    .count { color: #92a3bc; font-size: 12px; text-align: right; margin-top: 5px; }
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 22px; }
+    .preset { color: #c7d5eb; background: #1d2b43; border: 1px solid #3a4d67; border-radius: 999px; padding: 7px 11px; font-size: 12px; cursor: pointer; }
+    .preset:hover { border-color: #65d9bd; color: #fff; }
+    .preset.unsupported { border-style: dashed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; }
+    button { font: inherit; font-weight: 700; border-radius: 10px; padding: 10px 15px; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .primary { color: #061a20; background: #68ddc0; border: 1px solid #68ddc0; }
+    .secondary { color: #d6e2f4; background: transparent; border: 1px solid #52647d; }
+    .status { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #52647d; border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 800; color: #c7d5eb; }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .status.running { color: #f0c879; border-color: #8c7245; }
+    .status.completed { color: #68ddc0; border-color: #3f8a79; }
+    .status.error { color: #ff9b9b; border-color: #9a4c59; }
+    .result-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 16px; }
+    .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .stat { border: 1px solid #30425d; border-radius: 10px; padding: 12px; background: #0d1729; }
+    .stat span { display: block; color: #91a4bf; font-size: 11px; text-transform: uppercase; font-weight: 800; letter-spacing: .08em; }
+    .stat strong { display: block; font-size: 19px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+    .output-grid { display: grid; gap: 12px; }
+    .output-grid h3 { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: #99acc7; margin: 0 0 7px; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 100px; padding: 13px; background: #091323; border: 1px solid #30425d; border-radius: 10px; font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    #sanitized { border-color: #3c7f77; }
+    details { margin-top: 14px; }
+    summary { color: #a6c8da; font-size: 13px; cursor: pointer; }
+    #raw { margin-top: 10px; max-height: 220px; overflow: auto; font-size: 12px; }
+    .note { color: #8fa2bd; font-size: 12px; margin: 14px 0 0; }
+    #message { min-height: 20px; color: #ffbd9f; font-size: 13px; margin: 12px 0 0; }
+    @media (max-width: 880px) { .shell { grid-template-columns: 1fr; } main { padding: 28px 16px 48px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Task 3 · local assessment tool</div>
+  <h1>PII Stream Lab</h1>
+  <p class="intro">Send synthetic text through the mock provider and the real streaming gateway. Watch only the sanitized client response appear, one SSE content event at a time.</p>
+  <div class="shell">
+    <section class="panel" aria-labelledby="input-title">
+      <h2 id="input-title">Input and stream settings</h2>
+      <p class="muted">Use fictional examples only. Text stays in this browser session and is sent to the local mock provider.</p>
+      <label for="testText">Synthetic text</label>
+      <textarea id="testText" maxlength="4096" spellcheck="false" placeholder="Example: Contact jane@example.com for help."></textarea>
+      <div id="textCount" class="count">0 / 4096 characters</div>
+      <div class="field-row">
+        <div><label for="chunkSize">Characters per chunk</label><select id="chunkSize"><option>1</option><option>2</option><option>5</option><option selected>10</option><option>50</option><option>100</option></select></div>
+        <div><label for="delayMs">Delay per chunk</label><select id="delayMs"><option value="0">0 ms</option><option value="10">10 ms</option><option value="20" selected>20 ms</option><option value="50">50 ms</option><option value="100">100 ms</option></select></div>
+      </div>
+      <label>Try a synthetic preset</label>
+      <div class="presets" id="presets"></div>
+      <div class="actions">
+        <button id="start" class="primary" type="button">Start test</button>
+        <button id="cancel" class="secondary" type="button" disabled>Cancel</button>
+        <button id="clear" class="secondary" type="button">Clear results</button>
+      </div>
+      <p id="message" role="alert"></p>
+      <p class="note">Unsupported presets are labeled as such. A value outside the documented patterns may remain visible.</p>
+    </section>
+    <section class="panel" aria-labelledby="result-title">
+      <div class="result-header"><div><h2 id="result-title">Client-visible result</h2><p class="muted">Redaction markers are emitted by the gateway, not computed in this page.</p></div><span id="status" class="status">Idle</span></div>
+      <div class="stats">
+        <div class="stat"><span>Redaction markers</span><strong id="markers">0</strong></div>
+        <div class="stat"><span>Content events</span><strong id="events">0</strong></div>
+        <div class="stat"><span>First content event</span><strong id="firstTime">—</strong></div>
+        <div class="stat"><span>Total duration</span><strong id="totalTime">—</strong></div>
+      </div>
+      <div class="output-grid">
+        <div><h3>Original synthetic input</h3><pre id="original">No test yet.</pre></div>
+        <div><h3>Sanitized streamed output</h3><pre id="sanitized" aria-live="polite">Waiting for a test.</pre></div>
+      </div>
+      <details><summary>Show client-visible sanitized SSE</summary><pre id="raw">No stream yet.</pre></details>
+      <p class="note">Compare the original and sanitized panels to inspect replacements. Timing measures the first sanitized content event, not model token generation.</p>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const presets = [
+    ["Plain", "A calm fictional message with no sensitive data."],
+    ["Email", "Contact jane@example.com for assistance."],
+    ["SSN", "Example SSN 123-45-6789 should be hidden."],
+    ["Test card", "Synthetic card 4111 1111 1111 1111 should be hidden."],
+    ["Multiple", "Email jane@example.com, SSN 123-45-6789, card 4111 1111 1111 1111."],
+    ["Incomplete email", "Contact jane@exam"],
+    ["Unformatted SSN · unsupported", "Example 123456789 is outside the supported SSN format."],
+    ["Obfuscated email · unsupported", "Contact jane [at] example.com is outside the supported email format."]
+  ];
+  for (const [label, value] of presets) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "preset" + (label.includes("unsupported") ? " unsupported" : "");
+    button.textContent = label;
+    button.addEventListener("click", () => { $("testText").value = value; updateCount(); $("testText").focus(); });
+    $("presets").appendChild(button);
+  }
+  let controller = null;
+  let runId = 0;
+  let started = 0;
+  let finished = false;
+  let content = "";
+  let raw = "";
+  let eventCount = 0;
+  const setStatus = (label, kind = "") => { $("status").textContent = label; $("status").className = "status " + kind; };
+  const milliseconds = (value) => `${Math.round(value)} ms`;
+  const updateCount = () => { $("textCount").textContent = `${$("testText").value.length} / 4096 characters`; };
+  $("testText").addEventListener("input", updateCount);
+
+  function resetResults() {
+    content = ""; raw = ""; eventCount = 0; finished = false;
+    $("original").textContent = "No test yet.";
+    $("sanitized").textContent = "Waiting for a test.";
+    $("raw").textContent = "No stream yet.";
+    $("markers").textContent = "0"; $("events").textContent = "0";
+    $("firstTime").textContent = "—"; $("totalTime").textContent = "—";
+    $("message").textContent = "";
+    setStatus("Idle");
+  }
+
+  function handleFrame(frame) {
+    raw += frame + "\n\n";
+    $("raw").textContent = raw;
+    const lines = frame.split("\n");
+    if (lines.some((line) => line === "event: error")) {
+      throw new Error("The gateway reported a safe stream error.");
+    }
+    const data = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).replace(/^ /, "")).join("\n");
+    if (data === "[DONE]") { finished = true; return; }
+    if (!data) return;
+    const event = JSON.parse(data);
+    const delta = event.choices?.[0]?.delta?.content;
+    if (typeof delta !== "string") return;
+    if (eventCount === 0) $("firstTime").textContent = milliseconds(performance.now() - started);
+    eventCount += 1;
+    content += delta;
+    $("sanitized").textContent = content;
+    $("events").textContent = String(eventCount);
+    $("markers").textContent = String((content.match(/\[REDACTED\]/g) || []).length);
+  }
+
+  $("start").addEventListener("click", async () => {
+    const text = $("testText").value;
+    if (!text) { $("message").textContent = "Enter synthetic text or choose a preset."; return; }
+    const currentRun = ++runId;
+    resetResults();
+    $("original").textContent = text;
+    $("sanitized").textContent = "";
+    $("raw").textContent = "";
+    setStatus("Streaming", "running");
+    $("start").disabled = true; $("cancel").disabled = false;
+    controller = new AbortController();
+    started = performance.now();
+    try {
+      const response = await fetch("/v1/chat/completions", {
+        method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({ model: "mock-llm", messages: [{ role: "user", content: "Synthetic manual test" }], stream: true, scenario: "custom", test_text: text, chunk_size: Number($("chunkSize").value), delay_ms: Number($("delayMs").value) })
+      });
+      if (!response.ok) throw new Error(`Request rejected (HTTP ${response.status}).`);
+      if (!response.body) throw new Error("This browser did not provide a readable response stream.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8", { fatal: true });
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (currentRun !== runId) return;
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+        let boundary;
+        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          handleFrame(frame);
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) throw new Error("The stream ended inside an SSE event.");
+      if (!finished) throw new Error("The stream ended without [DONE].");
+      setStatus("Completed", "completed");
+    } catch (error) {
+      if (currentRun !== runId) return;
+      if (error.name === "AbortError") setStatus("Cancelled");
+      else { setStatus("Error", "error"); $("message").textContent = error.message || "Streaming failed."; }
+    } finally {
+      if (currentRun === runId) {
+        $("totalTime").textContent = milliseconds(performance.now() - started);
+        $("start").disabled = false; $("cancel").disabled = true; controller = null;
+      }
+    }
+  });
+  $("cancel").addEventListener("click", () => controller?.abort());
+  $("clear").addEventListener("click", () => {
+    runId += 1;
+    controller?.abort(); controller = null;
+    $("start").disabled = false; $("cancel").disabled = true;
+    $("testText").value = ""; updateCount(); resetResults();
+  });
+})();
+</script>
+</body>
+</html>
