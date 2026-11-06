@@ -14,37 +14,74 @@ class StreamFormatError(Exception):
 
 async def data_events(chunks: AsyncIterator[bytes]) -> AsyncIterator[str]:
     decoder = codecs.getincrementaldecoder("utf-8")("strict")
-    buffer = ""
+    line = ""
+    lines: list[str] = []
+    frame_bytes = 0
+    after_cr = False
+    at_start = True
+
+    def accept(character: str) -> str | None:
+        nonlocal line, lines, frame_bytes, after_cr, at_start
+        if at_start:
+            at_start = False
+            if character == "\ufeff":
+                return None
+        if after_cr:
+            after_cr = False
+            if character == "\n":
+                return None
+        if character not in "\r\n":
+            line += character
+            frame_bytes += len(character.encode("utf-8"))
+            if frame_bytes > MAX_FRAME_BYTES:
+                raise StreamFormatError("SSE frame too large")
+            return None
+        after_cr = character == "\r"
+        frame_bytes += 1
+        if frame_bytes > MAX_FRAME_BYTES:
+            raise StreamFormatError("SSE frame too large")
+        if line:
+            lines.append(line)
+            line = ""
+            return None
+        event_lines = lines
+        lines = []
+        frame_bytes = 0
+        data = []
+        for event_line in event_lines:
+            if event_line.startswith("event:"):
+                event_type = event_line[6:]
+                event_type = event_type[1:] if event_type.startswith(" ") else event_type
+                if event_type != "message":
+                    raise StreamFormatError("Unsupported SSE event type")
+            if event_line == "data":
+                data.append("")
+            elif event_line.startswith("data:"):
+                value = event_line[5:]
+                data.append(value[1:] if value.startswith(" ") else value)
+        return "\n".join(data) if data else None
+
     async for chunk in chunks:
         # Slice only after the network read. HTTPX's aiter_raw(chunk_size=...)
         # waits to fill its requested size and can destroy time-to-first-token.
         for offset in range(0, len(chunk), 4096):
             try:
-                buffer += decoder.decode(chunk[offset:offset + 4096])
+                decoded = decoder.decode(chunk[offset:offset + 4096])
             except UnicodeDecodeError as exc:
                 raise StreamFormatError("Invalid UTF-8") from exc
-            # Keep a trailing CR until the next read so a split CRLF is one newline.
-            trailing_cr = buffer.endswith("\r")
-            body = buffer[:-1] if trailing_cr else buffer
-            buffer = body.replace("\r\n", "\n").replace("\r", "\n") + ("\r" if trailing_cr else "")
-            while "\n\n" in buffer:
-                frame, buffer = buffer.split("\n\n", 1)
-                if len(frame.encode("utf-8")) > MAX_FRAME_BYTES:
-                    raise StreamFormatError("SSE frame too large")
-                lines = []
-                for line in frame.split("\n"):
-                    if line.startswith("data:"):
-                        value = line[5:]
-                        lines.append(value[1:] if value.startswith(" ") else value)
-                if lines:
-                    yield "\n".join(lines)
-            if len(buffer.encode("utf-8")) > MAX_FRAME_BYTES:
-                raise StreamFormatError("SSE frame too large")
+            for character in decoded:
+                event = accept(character)
+                if event is not None:
+                    yield event
     try:
-        buffer += decoder.decode(b"", final=True)
+        tail = decoder.decode(b"", final=True)
     except UnicodeDecodeError as exc:
         raise StreamFormatError("Invalid UTF-8") from exc
-    if buffer.strip():
+    for character in tail:
+        event = accept(character)
+        if event is not None:
+            yield event
+    if line or lines:
         raise StreamFormatError("Incomplete SSE frame")
 
 
