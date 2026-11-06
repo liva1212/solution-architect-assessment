@@ -9,16 +9,27 @@ from collections.abc import AsyncIterator
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
 
 class Completion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str
     messages: list[dict[str, str]]
     stream: bool
     scenario: str = "plain"
     chunk_size: int | None = Field(default=None, ge=1, le=512)
     delay_ms: int = Field(default=0, ge=0, le=2000)
+    test_text: StrictStr | None = Field(default=None, max_length=4096)
+
+    @model_validator(mode="after")
+    def validate_custom_text(self) -> "Completion":
+        if self.scenario == "custom" and not self.test_text:
+            raise ValueError("custom scenario requires nonempty test_text")
+        if self.scenario != "custom" and self.test_text is not None:
+            raise ValueError("test_text is only available for the custom scenario")
+        return self
 
 
 TEXT = {
@@ -46,7 +57,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/chat/completions")
     async def completions(request: Completion) -> StreamingResponse:
-        if request.scenario not in TEXT and request.scenario != "long":
+        if request.scenario not in TEXT and request.scenario not in {"long", "custom"}:
             from fastapi import HTTPException
             raise HTTPException(400, "Unknown mock scenario")
 
@@ -56,7 +67,8 @@ def create_app() -> FastAPI:
                 if request.scenario == "long":
                     pieces = ("safe " for _ in range(5000))
                 else:
-                    text = TEXT[request.scenario]
+                    text = request.test_text if request.scenario == "custom" else TEXT[request.scenario]
+                    assert text is not None
                     size = request.chunk_size or (1 if request.scenario.endswith("_split") else 12)
                     pieces = (text[index:index + size] for index in range(0, len(text), size))
                 for piece in pieces:
