@@ -2,6 +2,8 @@
 
 This assessment implementation proxies OpenAI-style text-delta SSE from a local mock provider through an HTTP gateway. It redacts email, SSN-format, and Luhn-valid 13–19 digit card candidates before emitting client-visible content. It is not universal PII protection or a production LLM integration.
 
+The problem is that a sensitive value may span several streamed chunks. Inspecting each chunk alone could expose a fragment before the remaining bytes arrive. The local path is **mock provider → streaming gateway → client**: the gateway parses provider SSE, buffers ambiguous text, and constructs new client-visible SSE events only from inspected output.
+
 ## Run locally or in GitHub Codespaces
 
 From the repository root, install with Python 3.11 or newer:
@@ -38,13 +40,25 @@ Run all Tasks 1–3 tests and the reproducible localhost timing sample:
 
 ## Interactive manual testing
 
-The optional local playground is disabled by default. In GitHub Codespaces, use the setup commands above, start the mock provider in Terminal 1, then start the gateway in Terminal 2 with:
+The optional local playground is disabled by default. Reviewers must run the application locally or in their own Codespace; GitHub does not host it. In GitHub Codespaces, use the setup commands above, start the mock provider in Terminal 1 with `.venv/bin/python -m task3.provider`, then start the gateway in Terminal 2 with:
 
 ```sh
 TASK3_ENABLE_PLAYGROUND=1 .venv/bin/python -m task3.gateway
 ```
 
 Open the private forwarded port 8002 URL from the Codespaces **Ports** panel and append `/playground`. Enter synthetic text or choose a preset, select a provider chunk size and delay, and click **Start test**. The page shows the original text beside the progressively sanitized output, plus status, redaction marker count, content event count, time to first sanitized content, total duration, and optional raw sanitized SSE. The input limit is 4,096 characters. Try the email, SSN, and test-card presets for supported patterns; the unformatted SSN and obfuscated email presets demonstrate formats outside the current detector's scope. Use fictional data only. The page is served by the gateway and sends its request through the normal provider and redaction stream.
+
+![Completed three-value redaction in the PII Stream Lab](../docs/images/task3-redaction-demo.png)
+
+The completed run replaces a fictional email, formatted SSN, and published test-card number with three `[REDACTED]` markers. The panels show exactly what the client received.
+
+![Incomplete email candidate redacted at stream end](../docs/images/task3-fail-closed-demo.png)
+
+An unfinished `jane@exam` candidate is held until stream completion and then redacted rather than released as partial text.
+
+## Manual verification — November 6, 2026
+
+Independent testing in GitHub Codespaces passed for email, SSN, card, and multiple-value redaction; varied chunk sizes; incomplete candidates; long unresolved candidates that trigger fail-closed redaction; Unicode and multiline input; client cancellation; raw sanitized SSE inspection; and first-content latency. The complete automated suite passed 120 tests, including the default-disabled playground check.
 
 ## Stream and buffer design
 
