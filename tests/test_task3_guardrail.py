@@ -235,6 +235,16 @@ def test_real_http_stream_delivers_before_done():
                     chunks = [chunk async for chunk in response.aiter_bytes()]
             assert all(b"jane" not in chunk and b"example.com" not in chunk for chunk in chunks)
             assert visible(b"".join(chunks))[0] == "Please contact [REDACTED] for assistance. "
+            async with httpx.AsyncClient(timeout=10) as client:
+                async with client.stream("POST", f"http://127.0.0.1:{gateway_port}/v1/chat/completions", json={**REQUEST, "scenario": "delayed", "delay_ms": 200}) as response:
+                    async for chunk in response.aiter_bytes():
+                        if b'"content"' in chunk:
+                            break
+            for _ in range(100):
+                if provider.state.active_streams == 0:
+                    break
+                await asyncio.sleep(0.01)
+            assert provider.state.active_streams == 0
         finally:
             for server in servers:
                 server.should_exit = True
