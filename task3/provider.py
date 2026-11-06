@@ -42,6 +42,7 @@ def _event(piece: str) -> bytes:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Task 3 mock LLM provider")
+    app.state.active_streams = 0
 
     @app.post("/v1/chat/completions")
     async def completions(request: Completion) -> StreamingResponse:
@@ -50,18 +51,22 @@ def create_app() -> FastAPI:
             raise HTTPException(400, "Unknown mock scenario")
 
         async def generate() -> AsyncIterator[bytes]:
-            if request.scenario == "long":
-                pieces = ("safe " for _ in range(5000))
-            else:
-                text = TEXT[request.scenario]
-                size = request.chunk_size or (1 if request.scenario.endswith("_split") else 12)
-                pieces = (text[index:index + size] for index in range(0, len(text), size))
-            for piece in pieces:
-                yield _event(piece)
-                if request.delay_ms:
-                    await asyncio.sleep(request.delay_ms / 1000)
-            if request.scenario != "interrupted":
-                yield b"data: [DONE]\n\n"
+            app.state.active_streams += 1
+            try:
+                if request.scenario == "long":
+                    pieces = ("safe " for _ in range(5000))
+                else:
+                    text = TEXT[request.scenario]
+                    size = request.chunk_size or (1 if request.scenario.endswith("_split") else 12)
+                    pieces = (text[index:index + size] for index in range(0, len(text), size))
+                for piece in pieces:
+                    yield _event(piece)
+                    if request.delay_ms:
+                        await asyncio.sleep(request.delay_ms / 1000)
+                if request.scenario != "interrupted":
+                    yield b"data: [DONE]\n\n"
+            finally:
+                app.state.active_streams -= 1
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
