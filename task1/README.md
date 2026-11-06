@@ -22,3 +22,30 @@ Pydantic v2 validates types, exact ASCII ID syntax, positive finite amounts, tri
 The SDK 2.3.0 stdio reader forwards malformed-line parsing exceptions to its dispatcher. The dispatcher drops them by default; its supported `on_stream_exception` hook is an observer and does not send a JSON-RPC error. There is no supported server setting here that emits `-32700`. Malformed JSON lines are silently discarded and subsequent valid requests still work. This server keeps the official stdio transport intact.
 
 Only the SDK's stdio transport writes to stdout. Application logging uses stderr. The mock has no persistence, authentication, or real financial effects.
+
+## Manual Verification
+
+On November 6, 2026, Task 1 was tested in GitHub Codespaces with MCP Inspector over stdio. MCP Inspector selected the correct tool for each request.
+
+| Test | Expected result | Actual result |
+| --- | --- | --- |
+| Valid customer lookup | Return fictional customer record | PASS |
+| Invalid customer ID | JSON-RPC `-32602` | PASS |
+| Unknown customer | MCP tool error | PASS |
+| Valid simulated refund | Return simulated refund confirmation | PASS |
+| Negative refund amount | JSON-RPC `-32602` | PASS |
+| Refund reason too short | JSON-RPC `-32602` | PASS |
+
+Reproduce successful calls in MCP Inspector using these tool arguments:
+
+```json
+{"customer_id":"CUST-00001"}
+```
+
+Use that input with `get_customer_record`; the response includes `customer_id`, fictional `name`, `email`, `status`, and `account_balance`. For `trigger_refund`, use:
+
+```json
+{"customer_id":"CUST-00001","amount":2.5,"reason":"Duplicate order"}
+```
+
+The response includes a `SIM-` refund ID and `status: "simulated_refund"`.
