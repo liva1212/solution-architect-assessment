@@ -46,7 +46,7 @@ Pending candidate state is capped at **256 characters**. An unresolved candidate
 
 The supported email regex covers common ASCII mailbox syntax, SSN detection covers `ddd-dd-dddd`, and card detection covers 13–19 digits with optional spaces or hyphens that pass Luhn. These patterns may miss other PII and can redact fictional values that merely match. Luhn is not proof of a real card. Ambiguous adjacent numeric sequences and non-ASCII mailbox formats are outside this defined scope.
 
-Malformed UTF-8, oversized frames, invalid JSON deltas, unsupported content, or an upstream disconnect before `[DONE]` cause a safe SSE `event: error` and no completion marker. Before streaming starts, provider connection failures return HTTP 502 and timeouts return HTTP 504. The gateway does not expose raw upstream errors or content in error events. Client cancellation closes the upstream response and HTTPX client in the generator's `finally` block.
+Malformed UTF-8, oversized frames, invalid JSON deltas, unsupported content, or an upstream disconnect before `[DONE]` cause a safe SSE `event: error` and no completion marker. Before streaming starts, provider connection failures return HTTP 502 and timeouts return HTTP 504. The gateway does not expose raw upstream errors or content in error events. Client cancellation closes the upstream response and HTTPX client in the generator's `finally` block; a real-HTTP test verifies that an early client disconnect leaves no active mock-provider stream.
 
 ## Observed local timing
 
