@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
+from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
 
 from task3.redactor import Redactor
 from task3.sse import DONE, ERROR, StreamFormatError, content_event, data_events
@@ -19,12 +21,23 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Completion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str
     messages: list[dict[str, str]] = Field(min_length=1)
     stream: bool
     scenario: str = "plain"
     chunk_size: int | None = Field(default=None, ge=1, le=512)
     delay_ms: int = Field(default=0, ge=0, le=2000)
+    test_text: StrictStr | None = Field(default=None, max_length=4096)
+
+    @model_validator(mode="after")
+    def validate_custom_text(self) -> "Completion":
+        if self.scenario == "custom" and not self.test_text:
+            raise ValueError("custom scenario requires nonempty test_text")
+        if self.scenario != "custom" and self.test_text is not None:
+            raise ValueError("test_text is only available for the custom scenario")
+        return self
 
 
 def create_app(
@@ -32,9 +45,17 @@ def create_app(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
     timeout: float = 10.0,
+    enable_playground: bool | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Task 3 streaming PII guardrail")
     app.state.last_metrics = None
+
+    playground_enabled = enable_playground if enable_playground is not None else os.getenv("TASK3_ENABLE_PLAYGROUND") == "1"
+    if playground_enabled:
+        @app.get("/playground", response_class=HTMLResponse, include_in_schema=False)
+        async def playground() -> HTMLResponse:
+            page = Path(__file__).with_name("playground.html").read_text(encoding="utf-8")
+            return HTMLResponse(page, headers={"Cache-Control": "no-store"})
 
     @app.post("/v1/chat/completions")
     async def completions(request: Request) -> StreamingResponse:
