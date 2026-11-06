@@ -105,6 +105,44 @@ def test_authentication_and_default_timeout(tmp_path):
     assert primary.state.calls == 0
 
 
+@pytest.mark.parametrize("credential", [
+    "Bearer démo-tenant-a-key", "Bearer ÿ", "Bearer demo-tenant-a-key extra",
+    "Bearer", "Bearer ", "Basic demo-tenant-a-key", "bearer demo-tenant-a-key",
+    "Bearer\tdemo-tenant-a-key", "Bearer demo-tenant-a-key, Bearer demo-tenant-b-key",
+])
+def test_malformed_authorization_is_standardized_401(tmp_path, credential):
+    app, primary, secondary = gateway(tmp_path)
+    # HTTPX requires raw bytes for non-ASCII header values; ASGI decodes them as Latin-1.
+    value = credential.encode("latin-1") if not credential.isascii() else credential
+    response = run(call(app, headers={"Authorization": value}))
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+    assert set(response.json()["error"]) == {"code", "message", "request_id"}
+    assert primary.state.calls == secondary.state.calls == 0
+
+
+def test_request_larger_than_entire_quota_requires_reduction(tmp_path):
+    cost = input_tokens(Completion.model_validate(REQUEST)) + REQUEST["max_tokens"]
+    app, primary, secondary = gateway(tmp_path, quota=cost - 1, max_wait=2)
+    response = run(call(app))
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_request"
+    assert "reduce" in response.json()["error"]["message"].lower()
+    assert "Retry-After" not in response.headers
+    assert run(app.state.ledger.usage("tenant-a")) == 0
+    assert primary.state.calls == secondary.state.calls == 0
+
+
+def test_temporary_quota_exhaustion_still_has_retry_after(tmp_path):
+    cost = input_tokens(Completion.model_validate(REQUEST)) + REQUEST["max_tokens"]
+    app, _, _ = gateway(tmp_path, quota=cost)
+    assert run(app.state.ledger.reserve("tenant-a", cost)).reservation_id
+    response = run(call(app))
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "rate_limit_exceeded"
+    assert int(response.headers["Retry-After"]) >= 1
+
+
 def test_database_failure_and_key_storage_are_safe(tmp_path):
     app, _, _ = gateway(tmp_path)
     async def fail(*_):

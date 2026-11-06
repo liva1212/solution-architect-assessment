@@ -120,7 +120,8 @@ def create_app(
     async def complete(request: Request):
         request_id = uuid.uuid4().hex
         auth = request.headers.get("authorization", "")
-        tenant = next((name for key, name in TENANTS.items() if hmac.compare_digest(auth, f"Bearer {key}")), None)
+        tenant = (next((name for key, name in TENANTS.items() if hmac.compare_digest(auth, f"Bearer {key}")), None)
+                  if auth.isascii() else None)
         if tenant is None:
             return error("unauthorized", "Valid Bearer credential required", request_id, 401)
         try:
@@ -129,12 +130,14 @@ def create_app(
             return error("invalid_request", "Invalid completion request", request_id, 422)
         prompt = input_tokens(body)
         reserved = prompt + body.max_tokens
+        if reserved > ledger.limit:
+            return error("invalid_request", "Requested token budget exceeds tenant quota; reduce the request", request_id, 422)
         try:
             decision = await admit(tenant, reserved)
         except sqlite3.Error:
             return error("gateway_unavailable", "Gateway temporarily unavailable", request_id, 503)
         if decision.reservation_id is None:
-            retry = max(1, math.ceil((decision.eligible_at or clock() + 60) - clock()))
+            retry = max(1, math.ceil(decision.eligible_at - clock())) if decision.eligible_at is not None else None
             LOGGER.info("request_id=%s tenant=%s outcome=quota_rejected", request_id, tenant)
             return error("rate_limit_exceeded", "Tenant token quota exceeded", request_id, 429, retry)
 
