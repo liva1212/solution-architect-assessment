@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Task 4 local quota storage
+.data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
