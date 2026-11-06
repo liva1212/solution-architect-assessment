@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
 import sys
 from typing import Annotated, Any
 from uuid import uuid4
@@ -22,11 +21,11 @@ from mcp.types import (
     TextContent,
     Tool,
 )
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
 
 CustomerId = Annotated[StrictStr, Field(pattern=r"^CUST-[0-9]{5}$")]
-Amount = StrictFloat | StrictInt
+Amount = Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)]
 
 
 class CustomerInput(BaseModel):
@@ -36,14 +35,7 @@ class CustomerInput(BaseModel):
 
 class RefundInput(CustomerInput):
     amount: Amount
-    reason: StrictStr
-
-    @field_validator("amount")
-    @classmethod
-    def positive_finite(cls, value: float | int) -> float | int:
-        if not math.isfinite(value) or value <= 0:
-            raise ValueError("amount must be positive and finite")
-        return value
+    reason: Annotated[StrictStr, Field(min_length=10)]
 
     @field_validator("reason")
     @classmethod
