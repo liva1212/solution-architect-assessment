@@ -36,6 +36,16 @@ Run all Tasks 1–3 tests and the reproducible localhost timing sample:
 .venv/bin/python -m task3.benchmark
 ```
 
+## Interactive manual testing
+
+The optional local playground is disabled by default. In GitHub Codespaces, use the setup commands above, start the mock provider in Terminal 1, then start the gateway in Terminal 2 with:
+
+```sh
+TASK3_ENABLE_PLAYGROUND=1 .venv/bin/python -m task3.gateway
+```
+
+Open the private forwarded port 8002 URL from the Codespaces **Ports** panel and append `/playground`. Enter synthetic text or choose a preset, select a provider chunk size and delay, and click **Start test**. The page shows the original text beside the progressively sanitized output, plus status, redaction marker count, content event count, time to first sanitized content, total duration, and optional raw sanitized SSE. The input limit is 4,096 characters. Try the email, SSN, and test-card presets for supported patterns; the unformatted SSN and obfuscated email presets demonstrate formats outside the current detector's scope. Use fictional data only. The page is served by the gateway and sends its request through the normal provider and redaction stream.
+
 ## Stream and buffer design
 
 The gateway validates `stream: true`, opens an HTTPX streaming response to its application-configured provider URL, and keeps that connection open until its FastAPI `StreamingResponse` completes or is cancelled. It incrementally decodes UTF-8, assembles complete SSE frames across transport reads, extracts only `choices[0].delta.content`, and emits newly built `data:` frames containing sanitized text. The accepted provider payload is exactly `{"choices":[{"delta":{"content":"..."}}]}`; an empty `delta` is an allowed non-content event. Multiple choices, unknown fields, and unexpected named SSE events fail closed. Provider metadata is never forwarded. A successful stream ends with `data: [DONE]`.
