@@ -194,7 +194,9 @@ def test_non_content_metadata_is_never_forwarded():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=gateway), base_url="http://gateway") as client:
             return await client.post("/v1/chat/completions", json=REQUEST)
     response = asyncio.run(run())
-    assert response.text == "data: [DONE]\n\n"
+    assert "event: error" in response.text
+    assert "jane@example.com" not in response.text
+    assert "data: [DONE]" not in response.text
 
 
 def test_real_http_stream_delivers_before_done():
